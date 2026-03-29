@@ -211,8 +211,8 @@ function ProjectStep({ cfg, set }) {
     <div>
       <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--fg)" }}>Project Details</h2>
       <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>Name your GoAnywhere project. This becomes the project name in Project Designer.</p>
-      <Field label="Project Name" required hint='Appears as the project name attribute — e.g. "ECP Incident Data - SnowFlake Load"'>
-        <Input value={cfg.name} onChange={(v) => set({ ...cfg, name: v })} placeholder="e.g. ECP Incident Data - SnowFlake Load" />
+      <Field label="Project Name" required hint='Appears as the project name attribute — e.g. "Daily Sales Report - Snowflake Load"'>
+        <Input value={cfg.name} onChange={(v) => set({ ...cfg, name: v })} placeholder="e.g. Daily Sales Report - Snowflake Load" />
       </Field>
     </div>
   );
@@ -225,13 +225,13 @@ function SourceStep({ cfg, set }) {
       <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>File location on the GoAnywhere server and CSV parsing settings.</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Field label="Source Directory" required hint="createFileList fileset dir path">
-          <Input value={cfg.path} onChange={(v) => set({ ...cfg, path: v })} placeholder="/home/mft-user/HelpSystems/GoAnywhere/userdata/SFTP/Inbound" />
+          <Input value={cfg.path} onChange={(v) => set({ ...cfg, path: v })} placeholder="/home/goanywhere/userdata/SFTP/Inbound" />
         </Field>
         <Field label="Filename Pattern" required hint="wildcardFilter include pattern">
-          <Input value={cfg.filename} onChange={(v) => set({ ...cfg, filename: v })} placeholder="*IncidentReport.csv" />
+          <Input value={cfg.filename} onChange={(v) => set({ ...cfg, filename: v })} placeholder="*Export.csv" />
         </Field>
         <Field label="Archive Directory" required hint="move destDir — processed files go here">
-          <Input value={cfg.archivePath} onChange={(v) => set({ ...cfg, archivePath: v })} placeholder="/mnt/efs/HelpSystems/GoAnywhere/userdata/SFTP/Archive" />
+          <Input value={cfg.archivePath} onChange={(v) => set({ ...cfg, archivePath: v })} placeholder="/home/goanywhere/userdata/SFTP/Archive" />
         </Field>
         <Field label="Field Delimiter">
           <Select value={cfg.delimiter} onChange={(v) => set({ ...cfg, delimiter: v })} options={DELIMITERS} />
@@ -263,14 +263,14 @@ function SnowflakeStep({ cfg, set }) {
           <Select value={cfg.insertMode} onChange={(v) => set({ ...cfg, insertMode: v })} options={INSERT_MODES} />
         </Field>
         <Field label="Database" required>
-          <Input value={cfg.database} onChange={(v) => set({ ...cfg, database: v })} placeholder="DSL" />
+          <Input value={cfg.database} onChange={(v) => set({ ...cfg, database: v })} placeholder="MY_DATABASE" />
         </Field>
         <Field label="Schema" required>
-          <Input value={cfg.schema} onChange={(v) => set({ ...cfg, schema: v })} placeholder="ECP_INGEST" />
+          <Input value={cfg.schema} onChange={(v) => set({ ...cfg, schema: v })} placeholder="MY_SCHEMA" />
         </Field>
         <div style={{ gridColumn: "1 / -1" }}>
           <Field label="Table" required>
-            <Input value={cfg.table} onChange={(v) => set({ ...cfg, table: v })} placeholder="INCIDENTS" />
+            <Input value={cfg.table} onChange={(v) => set({ ...cfg, table: v })} placeholder="MY_TABLE" />
           </Field>
         </div>
       </div>
@@ -464,7 +464,7 @@ function ColumnsStep({ columns, setColumns }) {
           <textarea
             value={importText}
             onChange={(e) => { setImportText(e.target.value); setImportError(""); }}
-            placeholder={"COLUMN_NAME|DATA_TYPE\nCR_1_PTS|NUMBER\nLAUNDRY|TEXT\nDATECREATED|TIMESTAMP_NTZ"}
+            placeholder={"COLUMN_NAME|DATA_TYPE\nFIRST_NAME|TEXT\nAMOUNT|NUMBER\nCREATED_DATE|TIMESTAMP_NTZ"}
             rows={8}
             style={{ width: "100%", padding: "10px 12px", fontSize: 13, fontFamily: "'JetBrains Mono', 'Fira Code', monospace", border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--input-bg)", color: "var(--fg)", resize: "vertical", outline: "none", boxSizing: "border-box" }}
           />
@@ -604,7 +604,7 @@ function ColumnsStep({ columns, setColumns }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 12 }}>
               <Field label="Column Name" required hint="readCSV column name attribute">
-                <Input value={col.csvName} onChange={(v) => updateCol(i, "csvName", v)} placeholder="e.g. Incident Description" />
+                <Input value={col.csvName} onChange={(v) => updateCol(i, "csvName", v)} placeholder="e.g. Customer Name" />
               </Field>
               <Field label="SF Type" hint="For reference">
                 <Select value={col.type} onChange={(v) => updateCol(i, "type", v)} options={SF_TYPES} />
