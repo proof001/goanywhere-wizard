@@ -1,10 +1,22 @@
 import { useState, useCallback, useRef } from "react";
+import { escapeXml } from "./escapeXml.js";
+import { generateApiJsonXML } from "./generateApiJsonXml.js";
 
 const STEPS = [
   { id: "project", label: "Project", icon: "📋" },
   { id: "source", label: "Source", icon: "📁" },
   { id: "snowflake", label: "Snowflake", icon: "❄️" },
   { id: "columns", label: "Columns", icon: "🔀" },
+  { id: "options", label: "Options", icon: "⚙️" },
+  { id: "review", label: "Review", icon: "✅" },
+];
+
+const API_JSON_STEPS = [
+  { id: "project", label: "Project", icon: "📋" },
+  { id: "rest", label: "REST GET", icon: "🌐" },
+  { id: "response", label: "Response File", icon: "💾" },
+  { id: "snowflake", label: "Snowflake", icon: "❄️" },
+  { id: "jsonCols", label: "JSON Paths", icon: "🔀" },
   { id: "options", label: "Options", icon: "⚙️" },
   { id: "review", label: "Review", icon: "✅" },
 ];
@@ -46,8 +58,7 @@ const LOG_LEVELS = [
 ];
 
 function generateXML(cfg) {
-  const esc = (s) =>
-    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  const esc = escapeXml;
 
   const projName = esc(cfg.project.name);
   const sfFull = esc(cfg.snowflake.database) + "." + esc(cfg.snowflake.schema) + "." + esc(cfg.snowflake.table);
@@ -276,6 +287,313 @@ function SnowflakeStep({ cfg, set }) {
       </div>
       <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "rgba(78,168,222,0.08)", border: "1px solid rgba(78,168,222,0.2)", fontSize: 13, color: "var(--accent)" }}>
         INSERT INTO <strong>{cfg.database || "DB"}.{cfg.schema || "SCHEMA"}.{cfg.table || "TABLE"}</strong>
+      </div>
+    </div>
+  );
+}
+
+function RestRequestStep({ cfg, set }) {
+  const addQuery = () => set({ ...cfg, queryParams: [...cfg.queryParams, { name: "", value: "" }] });
+  const removeQuery = (i) => set({ ...cfg, queryParams: cfg.queryParams.filter((_, idx) => idx !== i) });
+  const updateQuery = (i, field, val) => {
+    const copy = [...cfg.queryParams];
+    copy[i] = { ...copy[i], [field]: val };
+    set({ ...cfg, queryParams: copy });
+  };
+  const addHeader = () => set({ ...cfg, headers: [...cfg.headers, { name: "", value: "" }] });
+  const removeHeader = (i) => set({ ...cfg, headers: cfg.headers.filter((_, idx) => idx !== i) });
+  const updateHeader = (i, field, val) => {
+    const copy = [...cfg.headers];
+    copy[i] = { ...copy[i], [field]: val };
+    set({ ...cfg, headers: copy });
+  };
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--fg)" }}>REST GET Request</h2>
+      <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>
+        Use a REST Web Service resource configured in GoAnywhere. Path is relative to the resource base URL; query parameters are appended to the path.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label="REST Resource ID" required hint='webServiceRest resourceId — matches Resources → REST Web Service'>
+          <Input value={cfg.resource} onChange={(v) => set({ ...cfg, resource: v })} placeholder="e.g. MyAPI_REST" />
+        </Field>
+        <Field label="Resource Path" required hint="Relative path, e.g. /v1/users or /api/items">
+          <Input value={cfg.path} onChange={(v) => set({ ...cfg, path: v })} placeholder="/v1/items" />
+        </Field>
+      </div>
+      <div style={{ marginTop: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--label)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Query parameters</span>
+          <Btn onClick={addQuery} variant="ghost" style={{ fontSize: 13, padding: "6px 14px" }}>+ Add</Btn>
+        </div>
+        {cfg.queryParams.length === 0 && <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>Optional. Example: limit=100</div>}
+        {cfg.queryParams.map((p, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
+            <Input value={p.name} onChange={(v) => updateQuery(i, "name", v)} placeholder="name" style={{ flex: 1 }} />
+            <Input value={p.value} onChange={(v) => updateQuery(i, "value", v)} placeholder="value" style={{ flex: 1 }} />
+            <button type="button" onClick={() => removeQuery(i)} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 18 }} title="Remove">×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--label)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Request headers</span>
+          <Btn onClick={addHeader} variant="ghost" style={{ fontSize: 13, padding: "6px 14px" }}>+ Add</Btn>
+        </div>
+        {cfg.headers.length === 0 && <div style={{ color: "#666", fontSize: 13 }}>Optional. Example: Accept = application/json</div>}
+        {cfg.headers.map((h, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
+            <Input value={h.name} onChange={(v) => updateHeader(i, "name", v)} placeholder="Header name" style={{ flex: 1 }} />
+            <Input value={h.value} onChange={(v) => updateHeader(i, "value", v)} placeholder="Value" style={{ flex: 1 }} />
+            <button type="button" onClick={() => removeHeader(i)} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 18 }} title="Remove">×</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResponseFileStep({ cfg, set }) {
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--fg)" }}>Response File</h2>
+      <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>
+        Full path on the GoAnywhere server where the REST response body is written. Read JSON will use this same path.
+      </p>
+      <Field label="Output File Path" required hint="webServiceRest outputFile and readJSON inputFile">
+        <Input value={cfg.outputFile} onChange={(v) => set({ ...cfg, outputFile: v })} placeholder="/home/goanywhere/userdata/temp/api_response.json" />
+      </Field>
+    </div>
+  );
+}
+
+function JsonColumnsStep({ columns, setColumns }) {
+  const dragIdx = useRef(null);
+  const dragOverIdx = useRef(null);
+  const [dragging, setDragging] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+
+  const addCol = () => setColumns([...columns, { name: "", path: "", type: "VARCHAR", format: "" }]);
+  const removeCol = (i) => setColumns(columns.filter((_, idx) => idx !== i));
+  const updateCol = (i, field, val) => {
+    const copy = [...columns];
+    copy[i] = { ...copy[i], [field]: val };
+    setColumns(copy);
+  };
+
+  const onDragStart = (i) => { dragIdx.current = i; setDragging(i); };
+  const onDragEnter = (i) => { dragOverIdx.current = i; setDragOver(i); };
+  const onDragEnd = () => {
+    if (dragIdx.current !== null && dragOverIdx.current !== null && dragIdx.current !== dragOverIdx.current) {
+      const copy = [...columns];
+      const item = copy.splice(dragIdx.current, 1)[0];
+      copy.splice(dragOverIdx.current, 0, item);
+      setColumns(copy);
+    }
+    dragIdx.current = null;
+    dragOverIdx.current = null;
+    setDragging(null);
+    setDragOver(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, color: "var(--fg)" }}>JSON Path Mapping</h2>
+          <p style={{ margin: "4px 0 0", color: "#888", fontSize: 14 }}>Column order matches INSERT placeholders. Paths use Read JSON syntax (e.g. /items/name or /data/0/id). Drag to reorder.</p>
+        </div>
+        <Btn onClick={addCol} variant="ghost" style={{ fontSize: 13 }}>+ Add Column</Btn>
+      </div>
+      {columns.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: "#999", border: "2px dashed var(--border)", borderRadius: 10 }}>
+          No columns defined. Click &quot;Add Column&quot; to map JSON fields to Snowflake columns.
+        </div>
+      )}
+      {columns.map((col, i) => (
+        <div
+          key={col.name + "-" + i}
+          draggable
+          onDragStart={() => onDragStart(i)}
+          onDragEnter={() => onDragEnter(i)}
+          onDragEnd={onDragEnd}
+          onDragOver={(e) => e.preventDefault()}
+          style={{
+            border: dragging === i ? "1.5px dashed var(--accent)" : dragOver === i && dragging !== null && dragging !== i ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+            borderRadius: 10, padding: 16, marginBottom: 12,
+            background: dragging === i ? "rgba(78,168,222,0.08)" : "var(--card-bg)",
+            position: "relative", opacity: dragging === i ? 0.6 : 1,
+            transition: "border-color .15s, opacity .15s, background .15s",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute", top: 0, left: 0, bottom: 0, width: 32,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "grab", color: "#555", fontSize: 16, userSelect: "none",
+              borderRight: "1px solid var(--border)", borderRadius: "10px 0 0 10px",
+            }}
+            title="Drag to reorder"
+          >
+            {"\u2261"}
+          </div>
+          <div style={{ marginLeft: 36 }}>
+            <div style={{ position: "absolute", top: 10, right: 12 }}>
+              <button type="button" onClick={() => removeCol(i)} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 18, fontWeight: 700 }} title="Remove">x</button>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              index="{i + 1}"
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="RowSet / column name" required hint="readJSON column name attribute">
+                <Input value={col.name} onChange={(v) => updateCol(i, "name", v)} placeholder="e.g. customer_id" />
+              </Field>
+              <Field label="JSON path" required hint="readJSON column value (path)">
+                <Input value={col.path} onChange={(v) => updateCol(i, "path", v)} placeholder="e.g. /data/id or /items/0/name" />
+              </Field>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 12, marginTop: 12 }}>
+              <Field label="SF type" hint="For date/timestamp formats on data element">
+                <Select value={col.type} onChange={(v) => updateCol(i, "type", v)} options={SF_TYPES} />
+              </Field>
+            </div>
+            {(col.type === "DATE" || col.type.startsWith("TIMESTAMP")) && (
+              <Field label="Format pattern" hint="readJSON data dateFormat / timestampFormat">
+                <Input value={col.format} onChange={(v) => updateCol(i, "format", v)} placeholder={col.type === "DATE" ? "MM/DD/YYYY" : "yyyy-MM-dd HH:mm:ss"} />
+              </Field>
+            )}
+          </div>
+        </div>
+      ))}
+      {columns.length > 0 && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, padding: "10px 14px", borderRadius: 8, background: "var(--input-bg)", fontSize: 12, color: "#888" }}>
+          <span><strong style={{ color: "var(--fg)" }}>{columns.length}</strong> columns</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OptionsApiStep({ cfg, set }) {
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--fg)" }}>Additional Options</h2>
+      <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>Log level, batch insert size, and Read JSON parsing behavior.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label="Log Level">
+          <Select value={cfg.logLevel} onChange={(v) => set({ ...cfg, logLevel: v })} options={LOG_LEVELS} />
+        </Field>
+        <Field label="Batch Size" hint="sql query batchSize attribute">
+          <Input value={cfg.batchSize} onChange={(v) => set({ ...cfg, batchSize: v })} placeholder="10000" type="number" />
+        </Field>
+        <Field label="Trim Mode" hint="readJSON data trim attribute">
+          <Select value={cfg.trimMode} onChange={(v) => set({ ...cfg, trimMode: v })}
+            options={[
+              { value: "none", label: "None" },
+              { value: "both", label: "Both (leading + trailing)" },
+              { value: "leading", label: "Leading only" },
+              { value: "trailing", label: "Trailing only" },
+            ]}
+          />
+        </Field>
+      </div>
+      <div style={{ marginTop: 20 }}>
+        <Toggle checked={cfg.skipInvalidRecords} onChange={(v) => set({ ...cfg, skipInvalidRecords: v })} label="Skip invalid records (readJSON skipInvalidRecords)" />
+      </div>
+    </div>
+  );
+}
+
+function ReviewApiStep({ config }) {
+  const { project, rest, response, snowflake, jsonColumns, options } = config;
+  const sfFull = snowflake.database + "." + snowflake.schema + "." + snowflake.table;
+  const fullPathPreview = (() => {
+    let p = rest.path || "";
+    const pairs = (rest.queryParams || []).filter((q) => q && String(q.name || "").trim());
+    if (pairs.length) {
+      const qs = pairs.map((q) => `${encodeURIComponent(String(q.name).trim())}=${encodeURIComponent(String(q.value ?? ""))}`).join("&");
+      p += (p.includes("?") ? "&" : "?") + qs;
+    }
+    return p;
+  })();
+
+  const Section = ({ title, items }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>{title}</div>
+      <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 14 }}>
+        {items.map(([k, v], i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < items.length - 1 ? "1px solid var(--border)" : "none" }}>
+            <span style={{ color: "#888", fontSize: 13 }}>{k}</span>
+            <span style={{ color: "var(--fg)", fontSize: 13, fontWeight: 500, textAlign: "right", maxWidth: "60%", wordBreak: "break-all" }}>{v || "\u2014"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 6px", fontSize: 22, color: "var(--fg)" }}>Review Configuration</h2>
+      <p style={{ margin: "0 0 24px", color: "#888", fontSize: 14 }}>Verify before generating. Output follows GoAnywhere project XML conventions; confirm task names match your GA version if import fails.</p>
+      <Section title="Project" items={[["Name", project.name], ["Log Level", options.logLevel]]} />
+      <Section title="REST GET" items={[
+        ["REST Resource ID", rest.resource],
+        ["Resource path (with query)", fullPathPreview],
+        ["Request headers", (rest.headers || []).filter((h) => h && h.name.trim()).length + " header(s)"],
+      ]} />
+      <Section title="Response File" items={[["Output file (server path)", response.outputFile]]} />
+      <Section title="Snowflake" items={[
+        ["Resource ID", snowflake.resource], ["Target Table", sfFull],
+        ["Insert Mode", snowflake.insertMode], ["Batch Size", options.batchSize],
+      ]} />
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>JSON columns ({jsonColumns.length})</div>
+        <div style={{ background: "var(--input-bg)", borderRadius: 8, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1.5px solid var(--border)" }}>
+                {["Index", "Name", "JSON path", "SF Type"].map((h) => (
+                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#888", fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {jsonColumns.map((c, i) => (
+                <tr key={i} style={{ borderBottom: i < jsonColumns.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <td style={{ padding: "7px 12px", color: "#888" }}>{i + 1}</td>
+                  <td style={{ padding: "7px 12px", color: "var(--fg)", fontWeight: 500 }}>{c.name}</td>
+                  <td style={{ padding: "7px 12px", color: "var(--fg)", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{c.path}</td>
+                  <td style={{ padding: "7px 12px", color: "var(--fg)" }}>{c.type}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <Section title="Options" items={[
+        ["Skip Invalid Records", options.skipInvalidRecords ? "Yes" : "No"],
+        ["Trim", options.trimMode],
+      ]} />
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Module structure</div>
+        <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 16, fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: 12.5, color: "#8b9dc3", lineHeight: 1.8 }}>
+          <div>Main</div>
+          <div style={{ paddingLeft: 20 }}>{"\u251C\u2500"} setVariable Date</div>
+          <div style={{ paddingLeft: 20 }}>{"\u251C\u2500"} callModule {"\u2192"} REST GET</div>
+          {snowflake.insertMode === "TRUNCATE_INSERT" && <div style={{ paddingLeft: 20 }}>{"\u251C\u2500"} callModule {"\u2192"} Clear Table</div>}
+          <div style={{ paddingLeft: 20 }}>{"\u2514\u2500"} callModule {"\u2192"} Load JSON to Snowflake</div>
+          <div style={{ marginTop: 8 }}>REST GET</div>
+          <div style={{ paddingLeft: 20 }}>{"\u2514\u2500"} webServiceRest GET {"\u2192"} {response.outputFile || "output file"}</div>
+          {snowflake.insertMode === "TRUNCATE_INSERT" && <>
+            <div style={{ marginTop: 8 }}>Clear Table</div>
+            <div style={{ paddingLeft: 20 }}>{"\u2514\u2500"} sql TRUNCATE TABLE</div>
+          </>}
+          <div style={{ marginTop: 8 }}>Load JSON to Snowflake</div>
+          <div style={{ paddingLeft: 20 }}>{"\u251C\u2500"} readJSON ({jsonColumns.length} columns)</div>
+          <div style={{ paddingLeft: 20 }}>{"\u251C\u2500"} countRowSet</div>
+          <div style={{ paddingLeft: 20 }}>{"\u2514\u2500"} sql INSERT INTO {sfFull}</div>
+        </div>
       </div>
     </div>
   );
@@ -771,16 +1089,39 @@ const INITIAL = {
   options: { logLevel: "verbose", batchSize: "10000", trimMode: "none", skipInvalidRecords: true, addFilenameColumn: false },
 };
 
+const API_JSON_INITIAL = {
+  project: { name: "" },
+  rest: { resource: "", path: "", queryParams: [], headers: [] },
+  response: { outputFile: "" },
+  snowflake: { resource: "Snowflake", database: "", schema: "", table: "", insertMode: "INSERT" },
+  jsonColumns: [],
+  options: { logLevel: "verbose", batchSize: "10000", trimMode: "none", skipInvalidRecords: true },
+};
+
 export default function App() {
+  const [wizardMode, setWizardMode] = useState(null);
   const [step, setStep] = useState(0);
   const [config, setConfig] = useState(INITIAL);
   const [xmlOutput, setXmlOutput] = useState(null);
   const [copied, setCopied] = useState(false);
   const xmlRef = useRef(null);
 
+  const steps = wizardMode === "apiJson" ? API_JSON_STEPS : STEPS;
+
   const set = (key) => (val) => setConfig((prev) => ({ ...prev, [key]: val }));
 
   const canProceed = useCallback(() => {
+    if (wizardMode === "apiJson") {
+      switch (step) {
+        case 0: return config.project.name.trim() !== "";
+        case 1: return config.rest.resource.trim() !== "" && config.rest.path.trim() !== "";
+        case 2: return config.response.outputFile.trim() !== "";
+        case 3: return config.snowflake.resource.trim() !== "" && config.snowflake.database.trim() !== "" && config.snowflake.schema.trim() !== "" && config.snowflake.table.trim() !== "";
+        case 4: return config.jsonColumns.length > 0 && config.jsonColumns.every((c) => c.name.trim() && c.path.trim());
+        case 5: return true;
+        default: return true;
+      }
+    }
     switch (step) {
       case 0: return config.project.name.trim() !== "";
       case 1: return config.source.path.trim() !== "" && config.source.filename.trim() !== "" && config.source.archivePath.trim() !== "";
@@ -789,9 +1130,12 @@ export default function App() {
       case 4: return true;
       default: return true;
     }
-  }, [step, config]);
+  }, [step, config, wizardMode]);
 
-  const handleGenerate = () => setXmlOutput(generateXML(config));
+  const handleGenerate = () => {
+    if (wizardMode === "apiJson") setXmlOutput(generateApiJsonXML(config));
+    else setXmlOutput(generateXML(config));
+  };
 
   const handleCopy = () => {
     if (xmlOutput) {
@@ -814,7 +1158,26 @@ export default function App() {
     }
   };
 
-  const handleReset = () => { setStep(0); setConfig(INITIAL); setXmlOutput(null); };
+  const handleReset = () => {
+    setWizardMode(null);
+    setStep(0);
+    setConfig(INITIAL);
+    setXmlOutput(null);
+  };
+
+  const pickCsvMode = () => {
+    setWizardMode("csv");
+    setConfig(INITIAL);
+    setStep(0);
+    setXmlOutput(null);
+  };
+
+  const pickApiJsonMode = () => {
+    setWizardMode("apiJson");
+    setConfig(API_JSON_INITIAL);
+    setStep(0);
+    setXmlOutput(null);
+  };
 
   if (xmlOutput) {
     return (
@@ -830,9 +1193,52 @@ export default function App() {
             </div>
           </div>
           <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: "rgba(78,168,222,0.08)", border: "1px solid rgba(78,168,222,0.2)", fontSize: 13, color: "#aaa" }}>
-            Import via GoAnywhere {"\u2192"} Workflows {"\u2192"} Projects {"\u2192"} Import. Verify your <strong style={{ color: "var(--accent)" }}>resourceId</strong> matches your configured Snowflake database resource.
+            Import via GoAnywhere {"\u2192"} Workflows {"\u2192"} Projects {"\u2192"} Import. Verify <strong style={{ color: "var(--accent)" }}>resourceId</strong> values match your configured resources
+            {wizardMode === "apiJson" ? " (REST Web Service and Snowflake)." : " (Snowflake database resource)."}
+            {wizardMode === "apiJson" && (
+              <span> If import fails, export a sample REST + Read JSON project from your GA version and compare element names to <code style={{ color: "var(--accent)" }}>src/generateApiJsonXml.js</code>.</span>
+            )}
           </div>
           <pre ref={xmlRef} style={{ background: "#0d0e10", border: "1.5px solid var(--border)", borderRadius: 10, padding: 20, fontSize: 12.5, lineHeight: 1.6, overflowX: "auto", color: "#b0c4de", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", maxHeight: "70vh", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{xmlOutput}</pre>
+        </div>
+      </div>
+    );
+  }
+
+  if (wizardMode === null) {
+    return (
+      <div style={{ "--fg": "#e8e6e3", "--bg": "#111214", "--card-bg": "#1a1b1f", "--input-bg": "#16171b", "--border": "#2d2e33", "--accent": "#4ea8de", "--label": "#8b8d94", fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif", background: "var(--bg)", color: "var(--fg)", minHeight: "100vh", padding: 24 }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={{ maxWidth: 560, margin: "0 auto", paddingTop: 48 }}>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase", marginBottom: 6 }}>GoAnywhere MFT</div>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--fg)" }}>Project Builder</h1>
+            <p style={{ margin: "10px 0 0", color: "#888", fontSize: 15, lineHeight: 1.5 }}>Choose a workflow. Generated XML can be imported into Project Designer.</p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <button type="button" onClick={pickCsvMode}
+              style={{
+                textAlign: "left", padding: "22px 24px", borderRadius: 12, border: "1.5px solid var(--border)",
+                background: "var(--card-bg)", color: "var(--fg)", cursor: "pointer", transition: "border-color .15s, background .15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(78,168,222,0.06)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--card-bg)"; }}
+            >
+              <div style={{ fontSize: 20, marginBottom: 6 }}>{"\u2192"} CSV {"\u2192"} Snowflake</div>
+              <div style={{ fontSize: 14, color: "#888", lineHeight: 1.45 }}>Load CSV files from a directory, archive after load, insert into Snowflake with column mapping.</div>
+            </button>
+            <button type="button" onClick={pickApiJsonMode}
+              style={{
+                textAlign: "left", padding: "22px 24px", borderRadius: 12, border: "1.5px solid var(--border)",
+                background: "var(--card-bg)", color: "var(--fg)", cursor: "pointer", transition: "border-color .15s, background .15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(78,168,222,0.06)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--card-bg)"; }}
+            >
+              <div style={{ fontSize: 20, marginBottom: 6 }}>{"\u2192"} API GET {"\u2192"} JSON {"\u2192"} Snowflake</div>
+              <div style={{ fontSize: 14, color: "#888", lineHeight: 1.45 }}>REST GET to a file on the server, Read JSON into a RowSet, insert into Snowflake.</div>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -844,11 +1250,18 @@ export default function App() {
       <div style={{ maxWidth: 860, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase", marginBottom: 6 }}>GoAnywhere MFT</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--fg)" }}>CSV {"\u2192"} Snowflake Project Builder</h1>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--fg)" }}>
+            {wizardMode === "apiJson" ? "API GET \u2192 JSON \u2192 Snowflake" : "CSV \u2192 Snowflake Project Builder"}
+          </h1>
           <p style={{ margin: "6px 0 0", color: "#666", fontSize: 14 }}>Generates real GoAnywhere project XML {"\u2014"} ready to import into Project Designer.</p>
         </div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <Btn variant="ghost" style={{ fontSize: 13 }} onClick={() => { setWizardMode(null); setStep(0); setXmlOutput(null); }}>
+            {"\u2190"} Change workflow
+          </Btn>
+        </div>
         <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: 32, flexWrap: "wrap" }}>
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <button key={s.id} onClick={() => i <= step && setStep(i)}
               style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none",
@@ -864,16 +1277,33 @@ export default function App() {
           ))}
         </div>
         <div style={{ background: "var(--card-bg)", border: "1.5px solid var(--border)", borderRadius: 14, padding: 32, marginBottom: 20 }}>
-          {step === 0 && <ProjectStep cfg={config.project} set={set("project")} />}
-          {step === 1 && <SourceStep cfg={config.source} set={set("source")} />}
-          {step === 2 && <SnowflakeStep cfg={config.snowflake} set={set("snowflake")} />}
-          {step === 3 && <ColumnsStep columns={config.columns} setColumns={(v) => setConfig((prev) => ({ ...prev, columns: v }))} />}
-          {step === 4 && <OptionsStep cfg={config.options} set={set("options")} />}
-          {step === 5 && <ReviewStep config={config} />}
+          {wizardMode === "csv" && (
+            <>
+              {step === 0 && <ProjectStep cfg={config.project} set={set("project")} />}
+              {step === 1 && <SourceStep cfg={config.source} set={set("source")} />}
+              {step === 2 && <SnowflakeStep cfg={config.snowflake} set={set("snowflake")} />}
+              {step === 3 && <ColumnsStep columns={config.columns} setColumns={(v) => setConfig((prev) => ({ ...prev, columns: v }))} />}
+              {step === 4 && <OptionsStep cfg={config.options} set={set("options")} />}
+              {step === 5 && <ReviewStep config={config} />}
+            </>
+          )}
+          {wizardMode === "apiJson" && (
+            <>
+              {step === 0 && <ProjectStep cfg={config.project} set={set("project")} />}
+              {step === 1 && <RestRequestStep cfg={config.rest} set={set("rest")} />}
+              {step === 2 && <ResponseFileStep cfg={config.response} set={set("response")} />}
+              {step === 3 && <SnowflakeStep cfg={config.snowflake} set={set("snowflake")} />}
+              {step === 4 && <JsonColumnsStep columns={config.jsonColumns} setColumns={(v) => setConfig((prev) => ({ ...prev, jsonColumns: v }))} />}
+              {step === 5 && <OptionsApiStep cfg={config.options} set={set("options")} />}
+              {step === 6 && <ReviewApiStep config={config} />}
+            </>
+          )}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <Btn onClick={() => setStep(step - 1)} variant="ghost" disabled={step === 0}>{"\u2190"} Back</Btn>
-          {step < STEPS.length - 1
+          <Btn onClick={() => (step === 0 ? setWizardMode(null) : setStep(step - 1))} variant="ghost" disabled={false}>
+            {"\u2190"} {step === 0 ? "Workflow" : "Back"}
+          </Btn>
+          {step < steps.length - 1
             ? <Btn onClick={() => setStep(step + 1)} disabled={!canProceed()}>Next {"\u2192"}</Btn>
             : <Btn onClick={handleGenerate} disabled={!canProceed()}>Generate XML</Btn>
           }
